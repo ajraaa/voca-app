@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { isAdmin } from "@/lib/admin";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -26,7 +27,11 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push("/");
+      if (isAdmin(email)) {
+        router.push("/admin/withdrawals");
+      } else {
+        router.push("/");
+      }
     }
   };
 

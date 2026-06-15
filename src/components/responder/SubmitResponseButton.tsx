@@ -116,7 +116,7 @@ export default function SubmitResponseButton({
         className={`mt-2 px-6 py-2.5 font-medium text-white rounded-lg transition-all duration-200 flex justify-center ${
           isLoading || !userId || success || externalDisabled
             ? "bg-gray-400 cursor-not-allowed opacity-70" 
-            : "bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-md hover:shadow-lg"
+            : "bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-md hover:shadow-lg cursor-pointer"
         }`}
       >
         {isLoading ? (

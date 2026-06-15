@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { isUserTargeted } from '@/lib/survey-targeting'
+
 
 /**
  * POST /api/response/start
@@ -29,6 +31,42 @@ export async function POST(req: Request) {
 
     if (authError || !user) {
       return Response.json({ error: 'Unauthorized or invalid token' }, { status: 401 })
+    }
+
+    // Check targeting restriction and creator ownership
+    const { data: survey, error: surveyError } = await supabase
+      .from('surveys')
+      .select('creator_id')
+      .eq('id', body.survey_id)
+      .single()
+
+    if (surveyError || !survey) {
+      return Response.json({ error: 'Survey tidak ditemukan' }, { status: 404 })
+    }
+
+    if (survey.creator_id === user.id) {
+      return Response.json({ error: 'Pembuat survei tidak bisa mengisi survei sendiri' }, { status: 400 })
+    }
+
+    const { data: targeting } = await supabase
+      .from('survey_targeting')
+      .select('gender, age_min, age_max, jobs')
+      .eq('survey_id', body.survey_id)
+      .maybeSingle()
+
+    if (targeting) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('gender, age, job')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!isUserTargeted(profile, targeting)) {
+        return Response.json(
+          { error: 'Anda tidak memenuhi kriteria target responden survei ini' },
+          { status: 403 }
+        )
+      }
     }
 
     const { data: responseId, error } = await supabase.rpc('start_survey_response', {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { isUserTargeted } from '@/lib/survey-targeting'
 
 export async function PUT(
     req: Request,
@@ -115,6 +116,34 @@ export async function GET(
 
     if (!survey) {
       return Response.json({ error: 'Survey not found' }, { status: 404 })
+    }
+
+    // Check targeting restriction if the user is not the survey creator
+    if (!user_id || user_id !== survey.creator_id) {
+      const { data: targeting } = await supabase
+        .from('survey_targeting')
+        .select('gender, age_min, age_max, jobs')
+        .eq('survey_id', id)
+        .maybeSingle()
+
+      if (targeting) {
+        let userProfile = null
+        if (user_id) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('gender, age, job')
+            .eq('id', user_id)
+            .maybeSingle()
+          userProfile = profile
+        }
+
+        if (!isUserTargeted(userProfile, targeting)) {
+          return Response.json(
+            { error: 'Anda tidak memenuhi kriteria target responden survei ini' },
+            { status: 403 }
+          )
+        }
+      }
     }
 
     let has_submitted = false;

@@ -13,6 +13,11 @@ interface UserProfile {
   created_at: string
 }
 
+const FIXED_JOBS = [
+  'Mahasiswa', 'Pelajar', 'Karyawan', 'Freelancer', 'Wirausaha',
+  'Ibu rumah tangga', 'PNS', 'Profesional', 'Tidak bekerja',
+]
+
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -64,9 +69,13 @@ export default function ProfilePageContent() {
   // Form state
   const [gender, setGender] = useState<'male' | 'female' | ''>('')
   const [age, setAge] = useState<string>('')
-  const [job, setJob] = useState<string>('')
+  const [jobCategory, setJobCategory] = useState<string>('')
+  const [customJob, setCustomJob] = useState<string>('')
 
   const [isDirty, setIsDirty] = useState(false)
+
+  // Derived effective job value for save/dirty check
+  const effectiveJob = jobCategory === 'Lainnya' ? customJob : jobCategory
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +94,14 @@ export default function ProfilePageContent() {
           setProfile(json.data)
           setGender(json.data.gender ?? '')
           setAge(json.data.age !== null ? String(json.data.age) : '')
-          setJob(json.data.job ?? '')
+          const profileJob = json.data.job ?? ''
+          if (profileJob === '' || FIXED_JOBS.includes(profileJob)) {
+            setJobCategory(profileJob)
+            setCustomJob('')
+          } else {
+            setJobCategory('Lainnya')
+            setCustomJob(profileJob)
+          }
         }
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Terjadi kesalahan')
@@ -104,9 +120,9 @@ export default function ProfilePageContent() {
     const changed =
       gender !== (profile.gender ?? '') ||
       age !== (profile.age !== null ? String(profile.age) : '') ||
-      job !== (profile.job ?? '')
+      effectiveJob !== (profile.job ?? '')
     setIsDirty(changed)
-  }, [gender, age, job, profile])
+  }, [gender, age, effectiveJob, profile])
 
   const handleSave = async () => {
     if (!isDirty) return
@@ -118,7 +134,7 @@ export default function ProfilePageContent() {
       const payload: Record<string, unknown> = {
         gender: gender === '' ? null : gender,
         age: age === '' ? null : Number(age),
-        job: job.trim() === '' ? null : job.trim(),
+        job: effectiveJob.trim() === '' ? null : effectiveJob.trim(),
       }
 
       const res = await fetchWithAuth('/api/profile', {
@@ -136,7 +152,7 @@ export default function ProfilePageContent() {
         ...prev,
         gender: gender === '' ? null : gender as 'male' | 'female',
         age: age === '' ? null : Number(age),
-        job: job.trim() === '' ? null : job.trim(),
+        job: effectiveJob.trim() === '' ? null : effectiveJob.trim(),
       } : null)
 
       setIsDirty(false)
@@ -155,7 +171,14 @@ export default function ProfilePageContent() {
     if (!profile) return
     setGender(profile.gender ?? '')
     setAge(profile.age !== null ? String(profile.age) : '')
-    setJob(profile.job ?? '')
+    const profileJob = profile.job ?? ''
+    if (profileJob === '' || FIXED_JOBS.includes(profileJob)) {
+      setJobCategory(profileJob)
+      setCustomJob('')
+    } else {
+      setJobCategory('Lainnya')
+      setCustomJob(profileJob)
+    }
   }
 
   const formatDate = (dateStr: string) => {
@@ -265,7 +288,7 @@ export default function ProfilePageContent() {
           <p className="text-red-700 font-medium">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 text-sm font-semibold text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+            className="mt-4 px-4 py-2 text-sm font-semibold text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
           >
             Coba Lagi
           </button>
@@ -342,14 +365,30 @@ export default function ProfilePageContent() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   Pekerjaan
                 </label>
-                <input
-                  type="text"
-                  maxLength={100}
-                  placeholder="Masukkan pekerjaan..."
-                  value={job}
-                  onChange={(e) => setJob(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-shadow"
-                />
+                <select
+                  value={jobCategory}
+                  onChange={(e) => {
+                    setJobCategory(e.target.value)
+                    if (e.target.value !== 'Lainnya') setCustomJob('')
+                  }}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-shadow appearance-none cursor-pointer"
+                >
+                  <option value="">Pilih pekerjaan...</option>
+                  {FIXED_JOBS.map((j) => (
+                    <option key={j} value={j}>{j}</option>
+                  ))}
+                  <option value="Lainnya">Lainnya</option>
+                </select>
+                {jobCategory === 'Lainnya' && (
+                  <input
+                    type="text"
+                    maxLength={100}
+                    placeholder="Tulis pekerjaan kamu..."
+                    value={customJob}
+                    onChange={(e) => setCustomJob(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-shadow"
+                  />
+                )}
               </div>
             </div>
 
@@ -375,7 +414,7 @@ export default function ProfilePageContent() {
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="px-4 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  className="px-4 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Batalkan Perubahan
                 </button>
@@ -386,7 +425,7 @@ export default function ProfilePageContent() {
                 className={`flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all ${
                   saving || !isDirty
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md active:scale-[0.98]'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer'
                 }`}
               >
                 {saving ? (

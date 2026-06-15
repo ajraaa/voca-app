@@ -55,13 +55,36 @@ export async function GET(req: Request) {
             return Response.json({ error: txError.message }, { status: 400 })
         }
 
-        // Aggregate stats
         const txList = transactions ?? []
+
+        // Fetch failure_reason from withdrawals table
+        const withdrawIds = txList
+            .filter(t => t.reference_type === 'withdraw' && t.reference_id)
+            .map(t => t.reference_id)
+
+        const withdrawalsMap = new Map<string, { failure_reason: string | null }>()
+        if (withdrawIds.length > 0) {
+            const { data: withdrawalsData, error: wError } = await supabase
+                .from('withdrawals')
+                .select('id, failure_reason')
+                .in('id', withdrawIds)
+            if (!wError && withdrawalsData) {
+                withdrawalsData.forEach(w => {
+                    withdrawalsMap.set(w.id, { failure_reason: w.failure_reason })
+                })
+            }
+        }
+
+        // Aggregate stats
         const totalEarned = txList
             .filter((t) => t.type === 'reward' && t.status === 'success')
             .reduce((sum, t) => sum + Number(t.amount), 0)
         const totalWithdrawn = txList
-            .filter((t) => t.type === 'withdraw' && t.status === 'success')
+            .filter((t) => {
+                const meta = t.metadata as any
+                const ledgerType = meta?.ledger_type || t.type
+                return (ledgerType === 'withdraw_success' || (t.type === 'withdraw' && !meta?.ledger_type)) && t.status === 'success'
+            })
             .reduce((sum, t) => sum + Number(t.amount), 0)
         const pendingAmount = txList
             .filter((t) => t.status === 'pending')
@@ -78,16 +101,23 @@ export async function GET(req: Request) {
                     total_withdrawn: totalWithdrawn,
                     pending: pendingAmount,
                 },
-                transactions: txList.map((t) => ({
-                    id: t.id,
-                    type: t.type,
-                    amount: Number(t.amount),
-                    status: t.status,
-                    reference_id: t.reference_id,
-                    reference_type: t.reference_type,
-                    metadata: t.metadata,
-                    created_at: t.created_at,
-                })),
+                transactions: txList.map((t) => {
+                    const withdrawalData = t.reference_type === 'withdraw' && t.reference_id
+                        ? withdrawalsMap.get(t.reference_id)
+                        : null
+                    const failureReason = withdrawalData?.failure_reason || (t.metadata as any)?.failure_reason || null
+
+                    return {
+                        id: t.id,
+                        type: t.type,
+                        amount: Number(t.amount),
+                        status: t.status,
+                        reference_id: t.reference_id,
+                        reference_type: t.reference_type,
+                        metadata: failureReason ? { ...(t.metadata as any || {}), failure_reason: failureReason } : t.metadata,
+                        created_at: t.created_at,
+                    }
+                }),
             }
         })
     } catch {

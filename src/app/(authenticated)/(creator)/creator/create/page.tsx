@@ -8,6 +8,19 @@ import { computeInitialRewardEstimate } from '@/lib/reward-recommendation'
 
 type ResponseMode = 'fixed' | 'extended'
 
+const JOB_OPTIONS = [
+    'Mahasiswa',
+    'Pelajar',
+    'Karyawan',
+    'Freelancer',
+    'Wirausaha',
+    'Ibu rumah tangga',
+    'PNS',
+    'Profesional',
+    'Tidak bekerja',
+    'Lainnya',
+]
+
 export default function CreateSurveyPage() {
     const router = useRouter()
 
@@ -22,6 +35,12 @@ export default function CreateSurveyPage() {
     const [isError, setIsError] = useState(false)
     const [rewardWarning, setRewardWarning] = useState<string | null>(null)
     const [walletBalance, setWalletBalance] = useState<number | null>(null)
+
+    // Targeting state
+    const [targetGender, setTargetGender] = useState<string | null>(null)
+    const [targetAgeMin, setTargetAgeMin] = useState<number | ''>('')
+    const [targetAgeMax, setTargetAgeMax] = useState<number | ''>('')
+    const [targetJobs, setTargetJobs] = useState<string[]>([])
 
     useEffect(() => {
         let cancelled = false
@@ -63,6 +82,19 @@ export default function CreateSurveyPage() {
         return { requiredBudget, gap, affordable, sufficient: gap <= 0 }
     }, [reward, total, walletBalance])
 
+    // Narrow targeting warning (hanya peringatan, bukan blokir)
+    const narrowTargetingWarning = useMemo(() => {
+        let score = 0
+        if (targetGender) score += 1
+        if (targetAgeMin !== '' || targetAgeMax !== '') {
+            const min = targetAgeMin !== '' ? Number(targetAgeMin) : 0
+            const max = targetAgeMax !== '' ? Number(targetAgeMax) : 99
+            if (max - min <= 10) score += 1
+        }
+        if (targetJobs.length > 0) score += 1
+        return score >= 3
+    }, [targetGender, targetAgeMin, targetAgeMax, targetJobs])
+
     const handleSubmit = async () => {
         if (!title || reward <= 0 || total <= 0) {
             setIsError(true)
@@ -74,6 +106,19 @@ export default function CreateSurveyPage() {
         setMessage('')
         setIsError(false)
 
+        // Build targeting object (hanya kirim jika ada filter aktif)
+        const hasTargeting = targetGender !== null ||
+            targetAgeMin !== '' ||
+            targetAgeMax !== '' ||
+            targetJobs.length > 0
+
+        const targeting = hasTargeting ? {
+            gender: targetGender,
+            age_min: targetAgeMin !== '' ? Number(targetAgeMin) : null,
+            age_max: targetAgeMax !== '' ? Number(targetAgeMax) : null,
+            jobs: targetJobs,
+        } : undefined
+
         try {
             const data = await createSurvey({
                 title,
@@ -81,6 +126,8 @@ export default function CreateSurveyPage() {
                 reward_per_response: reward,
                 total_responses: total,
                 allow_extended_responses: responseMode === 'extended',
+                assumed_question_count: assumedQuestions,
+                targeting,
             })
 
             setIsError(false)
@@ -102,7 +149,7 @@ export default function CreateSurveyPage() {
     }
 
     return (
-        <div className="mx-auto w-full max-w-4xl">
+        <section className="mx-auto w-full max-w-6xl">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Buat Survey Baru</h1>
                 <p className="text-gray-500 text-sm mb-8">
@@ -292,6 +339,154 @@ export default function CreateSurveyPage() {
                                     </div>
                                 </div>
                             </button>
+                        </div>
+                    </div>
+
+                    {/* ===== TARGET RESPONDEN ===== */}
+                    <div className="lg:col-span-2">
+                        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/60">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">🎯</span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-800">Target Responden</p>
+                                        <p className="text-xs text-gray-400">Batasi siapa yang dapat mengisi survey ini</p>
+                                    </div>
+                                </div>
+                                <span className="text-xs font-medium px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">Opsional</span>
+                            </div>
+
+                            <div className="p-5 space-y-5">
+                                {/* Gender */}
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">Gender</p>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {[
+                                            { value: null, label: 'Semua', icon: '👥' },
+                                            { value: 'male', label: 'Pria', icon: '👨' },
+                                            { value: 'female', label: 'Wanita', icon: '👩' },
+                                        ].map((opt) => (
+                                            <button
+                                                key={String(opt.value)}
+                                                type="button"
+                                                id={`gender-${opt.value ?? 'all'}`}
+                                                onClick={() => setTargetGender(opt.value)}
+                                                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                                                    targetGender === opt.value
+                                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>{opt.icon}</span>
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Rentang Usia */}
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">Rentang Usia</p>
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative flex-1 max-w-[120px]">
+                                            <input
+                                                type="number"
+                                                id="target-age-min"
+                                                min="1"
+                                                max="100"
+                                                placeholder="Min"
+                                                value={targetAgeMin}
+                                                onChange={(e) => setTargetAgeMin(e.target.value === '' ? '' : Number(e.target.value))}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <span className="text-gray-400 text-sm font-medium">—</span>
+                                        <div className="relative flex-1 max-w-[120px]">
+                                            <input
+                                                type="number"
+                                                id="target-age-max"
+                                                min="1"
+                                                max="100"
+                                                placeholder="Max"
+                                                value={targetAgeMax}
+                                                onChange={(e) => setTargetAgeMax(e.target.value === '' ? '' : Number(e.target.value))}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        {(targetAgeMin !== '' || targetAgeMax !== '') && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setTargetAgeMin(''); setTargetAgeMax('') }}
+                                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="mt-1.5 text-[11px] text-gray-400">Biarkan kosong jika tidak ada batasan usia</p>
+                                </div>
+
+                                {/* Pekerjaan */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2.5">
+                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pekerjaan</p>
+                                        {targetJobs.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setTargetJobs([])}
+                                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                            >
+                                                Reset semua
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {JOB_OPTIONS.map((job) => {
+                                            const isSelected = targetJobs.includes(job)
+                                            return (
+                                                <button
+                                                    key={job}
+                                                    type="button"
+                                                    id={`job-${job.toLowerCase().replace(/\s+/g, '-')}`}
+                                                    onClick={() => {
+                                                        setTargetJobs(prev =>
+                                                            isSelected
+                                                                ? prev.filter(j => j !== job)
+                                                                : [...prev, job]
+                                                        )
+                                                    }}
+                                                    className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                                                        isSelected
+                                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                                                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    {isSelected && <span className="mr-1">✓</span>}
+                                                    {job}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                    <p className="mt-1.5 text-[11px] text-gray-400">
+                                        Pilih satu atau lebih. Biarkan kosong jika semua pekerjaan boleh mengisi.
+                                    </p>
+                                </div>
+
+                                {/* Narrow Targeting Warning */}
+                                {narrowTargetingWarning && (
+                                    <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                                        <span className="text-amber-500 shrink-0 text-base mt-0.5">⚠️</span>
+                                        <div>
+                                            <p className="text-sm font-semibold text-amber-900">Target responden terlalu spesifik</p>
+                                            <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                                                Survey dengan targeting sangat sempit mungkin lebih lambat mendapatkan respons.
+                                                Pertimbangkan untuk memperluas salah satu kriteria.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -539,6 +734,6 @@ export default function CreateSurveyPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </section>
     )
 }

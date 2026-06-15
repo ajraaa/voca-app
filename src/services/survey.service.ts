@@ -42,7 +42,20 @@ export async function getSurveyById(id: string) {
   return response.json();
 }
 
-export async function createSurvey(payload: { title: string; description?: string; reward_per_response: number; total_responses: number; allow_extended_responses?: boolean }) {
+export async function createSurvey(payload: {
+  title: string
+  description?: string
+  reward_per_response: number
+  total_responses: number
+  allow_extended_responses?: boolean
+  assumed_question_count?: number
+  targeting?: {
+    gender?: string | null
+    age_min?: number | null
+    age_max?: number | null
+    jobs?: string[]
+  }
+}) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
 
@@ -377,6 +390,55 @@ export async function getSurveyInsight(id: string) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || 'Gagal memuat insight');
+  }
+
+  return response.json();
+}
+
+export async function getSurveyTargeting(surveyId: string) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const response = await fetch(`/api/survey/${surveyId}/targeting`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Gagal memuat targeting survey');
+  }
+
+  return response.json();
+}
+
+export async function updateSurveyTargeting(
+  surveyId: string,
+  targeting: {
+    gender?: string | null
+    age_min?: number | null
+    age_max?: number | null
+    jobs?: string[]
+  }
+) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const response = await fetch(`/api/survey/${surveyId}/targeting`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(targeting),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Gagal mengupdate targeting survey');
   }
 
   return response.json();

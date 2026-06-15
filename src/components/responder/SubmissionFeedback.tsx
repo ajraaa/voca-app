@@ -98,7 +98,7 @@ export default function SubmissionFeedback({
         {onClose && (
           <button 
             onClick={onClose} 
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none bg-gray-100 hover:bg-gray-200 rounded-full p-1 transition-colors"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none bg-gray-100 hover:bg-gray-200 rounded-full p-1 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
