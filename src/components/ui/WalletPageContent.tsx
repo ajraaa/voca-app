@@ -545,8 +545,15 @@ export default function WalletPageContent() {
                           </td>
 
                           {/* Description */}
-                          <td className="px-5 py-3.5 text-gray-700 max-w-[180px]">
-                            <span className="line-clamp-1">{txDescription(tx)}</span>
+                          <td className="px-5 py-3.5 text-gray-700 max-w-[220px]">
+                            <div className="flex flex-col">
+                              <span className="line-clamp-1 text-gray-800 font-medium">{txDescription(tx)}</span>
+                              {(tx.metadata as any)?.failure_reason && (
+                                <span className="text-[11px] font-semibold text-red-500 mt-0.5">
+                                  Alasan: {(tx.metadata as any).failure_reason}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Type pill */}
